@@ -122,6 +122,23 @@ int open_listenfd(int portno);
 
 /* Wrappers for client/server helper functions */
 int Open_clientfd(char *hostname, int port);
-int Open_listenfd(int port); 
+int Open_listenfd(int port);
+
+typedef struct stats {
+    double arrival_time;
+    double dispatch_interval;
+    struct handler_thread_stats {
+        int handler_thread_id;
+        int handler_thread_req_count;
+        int handler_thread_static_req_count;
+        int handler_thread_dynamic_req_count;
+    } handler_thread_stats_t;
+} stats_t;
+
+//struct stats* statsCreate(int id){
+//    struct stats* res = malloc(sizeof(*res));
+//    res->handler_thread_stats_t.handler_thread_id = id;
+//    return res;
+//}
 
 #endif /* __CSAPP_H__ */
