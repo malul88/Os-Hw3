@@ -14,7 +14,7 @@ int fdGetSize(FDQueue queue);
 
 //bool fdContains(FDQueue queue, int element);
 
-int fdInsert(FDQueue queue, int element);
+int fdInsert(FDQueue queue, int element, double arrival_time);
 
 int fdRemoveFirst(FDQueue queue);
 

@@ -3,16 +3,18 @@
 
 struct node{
     int element ;
+    double arrival_time;
     Node next ;
     Node prev ;
 };
 
-Node nodeCreate(int element){
+Node nodeCreate(int element, double arrival_time){
     Node node = malloc(sizeof(*node));
     if (node == NULL){
         return NULL;
     }
     node->element = element;
+    node->arrival_time = arrival_time;
     node -> next = NULL;
     node -> prev = NULL;
 
@@ -46,6 +48,13 @@ int nodeGetElement(Node node){
         return -1;
     }
     return node -> element;
+}
+
+double nodeGetArrival(Node node){
+    if (node == NULL){
+        return -1;
+    }
+    return node -> arrival_time;
 }
 
 

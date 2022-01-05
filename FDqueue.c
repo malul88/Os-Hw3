@@ -29,11 +29,11 @@ int fdGetSize(FDQueue queue){
     return queue->size;
 }
 
-int fdInsert(FDQueue queue, int element){
+int fdInsert(FDQueue queue, int element, double arrival_time){
     if (queue == NULL){
         return -1;
     }
-    Node node = nodeCreate(element);
+    Node node = nodeCreate(element, arrival_time);
     if (node == NULL){
         return -1;
     }

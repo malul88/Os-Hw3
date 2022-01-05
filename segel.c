@@ -565,4 +565,12 @@ int Open_listenfd(int port)
     return rc;
 }
 
+struct stats* statsCreate(){
+    struct stats* res = malloc(sizeof(*res));
+    res->handler_thread_stats_t.handler_thread_req_count = 0;
+    res->handler_thread_stats_t.handler_thread_static_req_count = 0;
+    res->handler_thread_stats_t.handler_thread_dynamic_req_count = 0;
+    return res;
+}
+
 

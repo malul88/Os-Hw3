@@ -5,10 +5,11 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 typedef struct node *Node;
 
-Node nodeCreate(int element);
+Node nodeCreate(int , double );
 
 bool nodeDestroy(Node node);
 
@@ -17,6 +18,8 @@ Node nodeGetNext(Node node);
 Node nodeGetPrev(Node node);
 
 int nodeGetElement(Node node);
+
+double nodeGetArrival(Node node);
 
 bool nodeNewNext(Node node, Node new_next_node);
 

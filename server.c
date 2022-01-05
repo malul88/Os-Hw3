@@ -1,6 +1,8 @@
 #include "FDqueue.h"
 #include "segel.h"
 #include "request.h"
+#include <assert.h>
+
 
 
 #define SCHED_MAX 10
@@ -38,33 +40,40 @@ void getargs(int *port, int argc, char *argv[])
     *port = atoi(argv[1]);
 }
 
+double TimeGetSeconds() {
+    struct timeval t;
+    int rc = gettimeofday(&t, NULL);
+    assert(rc == 0);
+    return (double) ((double)t.tv_sec + (double)t.tv_usec / 1e6);
+}
 void* handle_t(struct stats **args) {
     int fd;
     pthread_mutex_lock(&mutex3);
     int id = j;
     j++;
     pthread_mutex_unlock(&mutex3);
-    printf("%d  ",id);
     struct stats *stat = args[id];
     stat->handler_thread_stats_t.handler_thread_id = id;
 
     while (1) {
         pthread_mutex_lock(&mutex_lock);
         while (wait_size == 0) {       // Wait for requests to arrive.
-            printf("waiting\n");
             pthread_cond_wait(&exist, &mutex_lock);
         }
         // Pop the first request in the queue and update .
         Node temp = fdPopFirst(wait_q);
-        printf("got fd = %d", nodeGetElement(temp));
+        double time_picked = TimeGetSeconds();
+        stat->arrival_time = nodeGetArrival(temp);
+        stat->dispatch_interval = time_picked - stat->arrival_time;
+        (stat->handler_thread_stats_t.handler_thread_req_count)++;
         wait_size--;
         handle_size++;
         fd = nodeGetElement(temp);
-        fdInsert(handle_q, fd);
+        fdInsert(handle_q, fd,time_picked);
         free(temp);
         pthread_mutex_unlock(&mutex_lock);
         // Handle the request and then close it's fd.
-        requestHandle(fd);
+        requestHandle(fd, stat);
         close(fd);
         // Update the queue of handling.
         pthread_mutex_lock(&mutex_lock2);
@@ -141,7 +150,7 @@ int main(int argc, char *argv[])
 
     struct stats* args[num_of_threads];
     for (int i = 0; i < num_of_threads; ++i) {
-        struct stats* stats1 = malloc(sizeof(stats1));
+        struct stats* stats1 = statsCreate();
         args[i] = stats1;
         pthread_t p;
         pthread_create(&p, NULL, (void *(*)(void *)) handle_t, args);
@@ -152,6 +161,7 @@ int main(int argc, char *argv[])
 	    clientlen = sizeof(clientaddr);
 
         LISTEN: connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+        double arrival_time = TimeGetSeconds();
         pthread_mutex_lock(&mutex_lock);
         current_size = handle_size + wait_size;  // Update current size of buffers.
         while (current_size >= queue_size){   // If number of request reach the maximum, then wait.
@@ -165,7 +175,7 @@ int main(int argc, char *argv[])
         pthread_mutex_unlock(&mutex_lock);
 
         pthread_mutex_lock(&mutex_lock);
-        fdInsert(wait_q, connfd);
+        fdInsert(wait_q, connfd, arrival_time);
         wait_size++;
         pthread_cond_signal(&exist);
         pthread_mutex_unlock(&mutex_lock);
