@@ -28,7 +28,7 @@ pthread_mutex_t mutex_lock;
 pthread_mutex_t mutex_lock2;
 pthread_mutex_t mutex3;
 FDQueue wait_q;
-FDQueue handle_q;
+//FDQueue handle_q;
 
 
 void getargs(int *port, int argc, char *argv[])
@@ -57,48 +57,66 @@ void* handle_t(struct stats **args) {
 
     while (1) {
         pthread_mutex_lock(&mutex_lock);
+        printf("thread num=%d, locked 1\n",stat->handler_thread_stats_t.handler_thread_id );
         while (wait_size == 0) {       // Wait for requests to arrive.
+            printf("size of wait q is = %d\n", fdGetSize(wait_q));
+            printf("thread num=%d, waiting lock 1\n",stat->handler_thread_stats_t.handler_thread_id );
             pthread_cond_wait(&exist, &mutex_lock);
         }
         // Pop the first request in the queue and update .
         Node temp = fdPopFirst(wait_q);
+        printf("trId = %d, node element is = %d\n",stat->handler_thread_stats_t.handler_thread_id, nodeGetElement(temp));
         double time_picked = TimeGetSeconds();
-        stat->arrival_time = nodeGetArrival(temp);
-        stat->dispatch_interval = time_picked - stat->arrival_time;
-        (stat->handler_thread_stats_t.handler_thread_req_count)++;
         wait_size--;
         handle_size++;
         fd = nodeGetElement(temp);
-        fdInsert(handle_q, fd,time_picked);
-        free(temp);
+        assert(fd != -1);
+        //int rc = fdInsert(handle_q, fd, time_picked);
+        //assert(rc != -1);
         pthread_mutex_unlock(&mutex_lock);
+        printf("thread num=%d, unlocked 1\n",stat->handler_thread_stats_t.handler_thread_id);
         // Handle the request and then close it's fd.
+        stat->arrival_time = nodeGetArrival(temp);
+        stat->dispatch_interval = time_picked - stat->arrival_time;
+        (stat->handler_thread_stats_t.handler_thread_req_count)++;
+        free(temp);
         requestHandle(fd, stat);
         close(fd);
         // Update the queue of handling.
-        pthread_mutex_lock(&mutex_lock2);
+        pthread_mutex_lock(&mutex_lock);
+        printf("thread num=%d, locked 2\n",stat->handler_thread_stats_t.handler_thread_id);
         handle_size--;
-        fdRemoveByElement(handle_q, fd);
+        //rc = fdRemoveByElement(handle_q, fd);
+        //printf("returned %d from remove by element = %d\n", rc, fd);
         pthread_cond_signal(&finished);
-        pthread_mutex_unlock(&mutex_lock2);
+        pthread_mutex_unlock(&mutex_lock);
+        printf("thread num=%d, unlocked 2\n",stat->handler_thread_stats_t.handler_thread_id);
     }
 }
 
 void handleOverload(char* method, int confd){
     int half = wait_size/2;
-    if (strcmp(method, "block")){ //wait until someone finished and there's a place to enqueue
+    if (strcmp("block", method) == 0){ //wait until someone finished and there's a place to enqueue;
         pthread_cond_wait(&finished, &mutex_lock);
         return;
-    } else if (strcmp(method, "dh")){ // Drop-head
-        fdPopFirst(wait_q);
+    } else if (strcmp("dh", method) == 0){ // Drop-head
+        Node rc = fdPopFirst(wait_q);
+        if (rc){
+            close(nodeGetElement(rc));
+        }
         wait_size--;
         return;
-    } else if (strcmp(method, "random")){
+    } else if (strcmp(method, "random") == 0){
         Node temp = fdGetHead(wait_q);
         while (temp != NULL && wait_size > half){
+            //sleep(2);
             if(rand()%2){
-                if (fdRemoveByElement(wait_q, nodeGetElement(temp) == -1)){
-                    return;
+                close(nodeGetElement(temp));
+                if (fdRemoveByElement(wait_q, nodeGetElement(temp)) == -1){
+                    temp = nodeGetNext(temp);
+                    continue;
+                } else {
+                    wait_size--;
                 }
             }
             temp = nodeGetNext(temp);
@@ -107,7 +125,7 @@ void handleOverload(char* method, int confd){
             }
         }
         return;
-    } else if (strcmp(method, "dt")){
+    } else if (strcmp(method, "dt") == 0){
         close(confd);
         to_listen = true;
         return;
@@ -124,6 +142,7 @@ int main(int argc, char *argv[])
     int listenfd, connfd, port, clientlen, num_of_threads, queue_size, current_size;
     char sched_alg[SCHED_MAX];
     struct sockaddr_in clientaddr;
+    wait_q = fdCreate();
     pthread_cond_init(&exist,NULL);
     pthread_cond_init(&finished,NULL);
     pthread_mutex_init(&mutex_lock, NULL);
@@ -133,8 +152,7 @@ int main(int argc, char *argv[])
     handle_size = 0;
     j = 0;
     to_listen = false;
-    wait_q = fdCreate();
-    handle_q = fdCreate();
+    //handle_q = fdCreate();
 
     if (argc < 5) {
         fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <sched_alg>\n", argv[0]);
@@ -143,7 +161,6 @@ int main(int argc, char *argv[])
     num_of_threads = atoi(argv[2]);
     queue_size = atoi(argv[3]);
     strcpy(sched_alg, argv[4]);
-
 
     getargs(&port, argc, argv);
     // Creating pool of threads
@@ -160,7 +177,9 @@ int main(int argc, char *argv[])
     while (1) {
 	    clientlen = sizeof(clientaddr);
 
-        LISTEN: connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+        LISTEN:
+        connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
+
         double arrival_time = TimeGetSeconds();
         pthread_mutex_lock(&mutex_lock);
         current_size = handle_size + wait_size;  // Update current size of buffers.
@@ -169,14 +188,18 @@ int main(int argc, char *argv[])
             current_size = handle_size + wait_size;
             if (to_listen){
                 to_listen = false;
+                pthread_mutex_unlock(&mutex_lock);
                 goto LISTEN;
             }
         }
-        pthread_mutex_unlock(&mutex_lock);
-
-        pthread_mutex_lock(&mutex_lock);
-        fdInsert(wait_q, connfd, arrival_time);
+//        pthread_mutex_unlock(&mutex_lock);
+//
+//        pthread_mutex_lock(&mutex_lock);
+        int res = fdInsert(wait_q, connfd, arrival_time);
+        printf("inserting confd = %d\n", connfd);
+        assert(res == 0);
         wait_size++;
+        printf("wait size = %d. handle size= %d\n", wait_size, handle_size);
         pthread_cond_signal(&exist);
         pthread_mutex_unlock(&mutex_lock);
     }

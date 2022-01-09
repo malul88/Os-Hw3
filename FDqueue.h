@@ -22,6 +22,8 @@ Node fdPopFirst(FDQueue queue);
 
 int fdRemoveByElement(FDQueue q, int element);
 
+
+
 Node fdGetHead(FDQueue queue);
 
 int fdClear(FDQueue queue);

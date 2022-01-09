@@ -91,19 +91,34 @@ int fdClear(FDQueue queue){
 int fdRemoveByElement(FDQueue q, int element){
     Node temp = q->head;
     if (!temp){
+        printf("list is empty\n");
         return -1;
     }
     if (q->size == 1 && nodeGetElement(q->head) == element){
-        q->head = NULL;
         free(temp);
+        q->head = NULL;
         q->size -= 1;
         return 0;
-    } else{
+    } else if (q->size == 1 && nodeGetElement(q->head) != element){
+        printf("list size == 1 but head->element not correct\n");
+        return -1;
+    }else if (nodeGetElement(q->head) == element){
+        Node new_head = nodeGetNext(q->head);
+        free(temp);
+        q->head = new_head;
+        nodeNewPrev(q->head, NULL);
+        q->size--;
+        return 0;
+    } else {
         while (temp != NULL){
             if (nodeGetElement(temp) == element){
                 break;
             }
             temp = nodeGetNext(temp);
+        }
+        if (temp == NULL){
+            printf("not found in the list \n");
+            return -1;
         }
         if (nodeGetPrev(temp)){
             nodeNewNext(nodeGetPrev(temp),nodeGetNext(temp));
