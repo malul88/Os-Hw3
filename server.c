@@ -17,7 +17,7 @@
 // Most of the work is done within routines written in request.c
 //
 
-// HW3: Parse the new arguments too
+// Declaring global vars.
 int wait_size;
 int handle_size;
 bool to_listen;
@@ -28,14 +28,14 @@ pthread_mutex_t mutex_lock;
 pthread_mutex_t mutex_lock2;
 pthread_mutex_t mutex3;
 FDQueue wait_q;
-//FDQueue handle_q;
+
 
 
 void getargs(int *port, int argc, char *argv[])
 {
     if (argc < 2) {
-	fprintf(stderr, "Usage: %s <port>\n", argv[0]);
-	exit(1);
+        fprintf(stderr, "Usage: %s <port>\n", argv[0]);
+        exit(1);
     }
     *port = atoi(argv[1]);
 }
@@ -46,10 +46,12 @@ double TimeGetSeconds() {
     assert(rc == 0);
     return (double) ((double)t.tv_sec + (double)t.tv_usec / 1e6);
 }
+
+// Function wich each thread execute.
 void* handle_t(struct stats **args) {
     int fd;
     pthread_mutex_lock(&mutex3);
-    int id = j;
+    int id = j;  // Picking I'd and increamenting j.
     j++;
     pthread_mutex_unlock(&mutex3);
     struct stats *stat = args[id];
@@ -66,10 +68,8 @@ void* handle_t(struct stats **args) {
         wait_size--;
         handle_size++;
         fd = nodeGetElement(temp);
-        assert(fd != -1);
-        //int rc = fdInsert(handle_q, fd, time_picked);
-        //assert(rc != -1);
         pthread_mutex_unlock(&mutex_lock);
+
         // Handle the request and then close it's fd.
         stat->arrival_time = nodeGetArrival(temp);
         stat->dispatch_interval = time_picked - stat->arrival_time;
@@ -77,11 +77,10 @@ void* handle_t(struct stats **args) {
         free(temp);
         requestHandle(fd, stat);
         close(fd);
+
         // Update the queue of handling.
         pthread_mutex_lock(&mutex_lock);
         handle_size--;
-        //rc = fdRemoveByElement(handle_q, fd);
-        //printf("returned %d from remove by element = %d\n", rc, fd);
         pthread_cond_signal(&finished);
         pthread_mutex_unlock(&mutex_lock);
     }
@@ -127,14 +126,7 @@ void handleOverload(char* method, int confd){
     }
 }
 
-
-
-
-int main(int argc, char *argv[])
-{
-    int listenfd, connfd, port, clientlen, num_of_threads, queue_size, current_size;
-    char sched_alg[SCHED_MAX];
-    struct sockaddr_in clientaddr;
+void initGlobalVars(){
     wait_q = fdCreate();
     pthread_cond_init(&exist,NULL);
     pthread_cond_init(&finished,NULL);
@@ -144,8 +136,17 @@ int main(int argc, char *argv[])
     wait_size = 0;
     handle_size = 0;
     j = 0;
-    to_listen = false;
-    //handle_q = fdCreate();
+}
+
+
+
+
+int main(int argc, char *argv[])
+{
+    int listenfd, connfd, port, clientlen, num_of_threads, queue_size, current_size;
+    char sched_alg[SCHED_MAX];
+    struct sockaddr_in clientaddr;
+    initGlobalVars();
 
     if (argc < 5) {
         fprintf(stderr, "Usage: %s <port> <threads> <queue_size> <sched_alg>\n", argv[0]);
@@ -156,8 +157,8 @@ int main(int argc, char *argv[])
     strcpy(sched_alg, argv[4]);
 
     getargs(&port, argc, argv);
-    // Creating pool of threads
 
+    // Creating pool of threads
     struct stats* args[num_of_threads];
     for (int i = 0; i < num_of_threads; ++i) {
         struct stats* stats1 = statsCreate();
@@ -167,13 +168,15 @@ int main(int argc, char *argv[])
     }
 
     listenfd = Open_listenfd(port);
+
+    // Master thread always listens and puts fd's in wait queue.
     while (1) {
-	    clientlen = sizeof(clientaddr);
+        clientlen = sizeof(clientaddr);
 
         LISTEN:
         connfd = Accept(listenfd, (SA *)&clientaddr, (socklen_t *) &clientlen);
-
         double arrival_time = TimeGetSeconds();
+
         pthread_mutex_lock(&mutex_lock);
         current_size = handle_size + wait_size;  // Update current size of buffers.
         while (current_size >= queue_size){   // If number of request reach the maximum, then wait.
@@ -185,13 +188,11 @@ int main(int argc, char *argv[])
                 goto LISTEN;
             }
         }
-//        pthread_mutex_unlock(&mutex_lock);
-//
-//        pthread_mutex_lock(&mutex_lock);
+
         int res = fdInsert(wait_q, connfd, arrival_time);
         assert(res == 0);
         wait_size++;
-        pthread_cond_signal(&exist);
+        pthread_cond_signal(&exist); // Waking some thread if waiting.
         pthread_mutex_unlock(&mutex_lock);
     }
 }
